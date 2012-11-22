@@ -25,11 +25,6 @@ class URILang {
    */
   protected $_supported_langs = array();
 
-  /**
-   * @var string The language specified in the URI
-   */
-  protected $_uri_lang = '';
-
 
   /**
    * The constructor
@@ -38,70 +33,135 @@ class URILang {
    */
   public function __construct()
   {
-
-    // load superclass
+    // get CI instance
     $this->_ci =& get_instance();
 
     // get lang abbreviations from uri and config file
     $this->_supported_langs = $this->_ci->config->item('supported_languages');
-    $this->_uri_lang = $this->_ci->uri->segment(1);
 
-    // check if the language defined in the URI is supported / if it is defined
-    if ($this->_lang_is_supported($this->_uri_lang))
-    {
-      // remove old cookie
-      $this->_ci->input->set_cookie('pref_lang', null, -1);
-      unset($_COOKIE['pref_lang']);
-
-      // set the new one
-      $this->_ci->input->set_cookie('pref_lang', $this->_uri_lang, $this->_ci->config->item('sess_expiration'));
-
-      // set lang to load
-      $this->_lang = $this->_uri_lang;
-    }
-    else
-    {
-      // defined language is not supported or not specified, check for cookie
-      $pref_lang = $this->_ci->input->cookie('pref_lang', true);
-
-      if ($pref_lang)
-      {
-        // cookie found, check if language is supported and pick default language if not
-        $this->_lang = ($this->_lang_is_supported($pref_lang)) ? $pref_lang : $this->_get_default_lang();
-      }
-      else
-      {
-        // cookie not found, check browser language
-        $browser_lang = substr(strtolower($this->_ci->input->server('HTTP_ACCEPT_LANGUAGE', true)), 0, 2);
-
-        // if browser language is supported, use it. if not, choose default lang
-        $this->_lang = ($this->_lang_is_supported($browser_lang)) ? $browser_lang : $this->_get_default_lang();
-      }
-    }
-
-    // set the detected language as default
-    $this->_ci->config->set_item('language', $this->_supported_langs[$this->_lang]);
+    $this->determine_new_lang();
 
     log_message('debug', "URILang Library Initialized");
   }
 
   /**
+   * Sets a new pref_lang cookie containg the given value
+   *
+   * @param string The language identifier to be stored in the cookie
+   */
+  protected function _set_new_cookie($value)
+  {
+    // remove old cookie
+    $this->_ci->input->set_cookie('pref_lang', null, -1);
+    unset($_COOKIE['pref_lang']);
+
+    // set the new one
+    $this->_ci->input->set_cookie('pref_lang', $value, $this->_ci->config->item('sess_expiration'));
+  }
+
+  /**
+   * Sets the given language as the system's new default language
+   *
+   * @param string The new language's identifier
+   */
+  protected function _set_new_lang($lang)
+  {
+    $this->_set_new_cookie($lang);
+    $this->_lang = $lang;
+
+    // set the detected language as the system's new default
+    $this->_ci->config->set_item('language', $this->_supported_langs[$this->_lang]);
+  }
+
+  /**
+   * Determines the system's new language by:
+   * 1. URI
+   * 2. Cookie
+   * 3. Request header (browser)
+   * 4. The system's default language
+   */
+  public function determine_new_lang()
+  {
+    // the potential new language identifiers sorted by priority
+    $potential_langs = array(
+      $this->get_lang_by_uri(), // from the URI
+      $this->get_lang_by_cookie(), // from the cookie
+      $this->get_lang_by_request_header(), // from the request header
+      $this->get_default_lang() // fallback language
+    );
+
+    $new_lang = $this->find_supported_lang($potential_langs);
+    $this->_set_new_lang($new_lang);
+  }
+
+  /**
+   * Returns the first language from the given array that is supported
+   *
+   * @param  array  The languages that should be checked
+   * @return string The first supported language found
+   */
+  public function find_supported_lang($langs)
+  {
+    $first_match = '';
+
+    foreach($langs as $lang)
+    {
+      if (empty($first_match) && $this->lang_is_supported($lang))
+      {
+        $first_match = $lang;
+      }
+    }
+
+    return $first_match;
+  }
+
+  /**
+   * Gets the language identifier from the current URI
+   *
+   * @return string The language identifier
+   */
+  public function get_lang_by_uri()
+  {
+    return $this->_ci->uri->segment(1);
+  }
+
+  /**
+   * Gets the language identifier stored in the pref_lang cookie
+   *
+   * @return string|null The language identifier or null if the cookie doesn't exist
+   */
+  public function get_lang_by_cookie()
+  {
+    return $this->_ci->input->cookie('pref_lang', true);
+  }
+
+  /**
+   * Gets the language identifier from the request's header (the browser's default language)
+   *
+   * @return string The language identifier
+   */
+  public function get_lang_by_request_header()
+  {
+    return substr(strtolower($this->_ci->input->server('HTTP_ACCEPT_LANGUAGE', true)), 0, 2);
+  }
+
+  /**
    * Checks if the passed language identifier is supported
    *
-   * @param   string  The language identifier to be verified
-   * @return  bool    Whether the language is supported or not
+   * @param  string The language identifier to be verified
+   * @return bool   Whether the language is supported or not
    */
-  protected function _lang_is_supported($lang)
+  public function lang_is_supported($lang)
   {
     return isset($this->_supported_langs[$lang]);
   }
 
   /**
-   * Determines the default language
+   * Determines the system's default language as set in the config file
    *
-   * @return  string  The identifier of the default language
+   * @return string The identifier of the default language
    */
-  protected function _get_default_lang()
+  public function get_default_lang()
   {
     // check if default language is specified in supported languages
     if (in_array($this->_ci->config->item('language'), $this->_supported_langs))
@@ -121,7 +181,7 @@ class URILang {
    * Builds an array containing all supported languages (led by the current language),
    * which can be used to build a language selector
    *
-   * @return  array   The array mentioned above
+   * @return array The array mentioned above
    */
   public function get_lang_array()
   {
@@ -132,7 +192,7 @@ class URILang {
   /**
    * Returns the selected language.
    *
-   * @param   bool    Return an array with 'en' => 'english' or just the key 'en'
+   * @param bool Return an array with 'en' => 'english' or just the key 'en'
    */
   public function selected_language($fullResponse = FALSE)
   {
