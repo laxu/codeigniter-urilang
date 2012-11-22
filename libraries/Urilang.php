@@ -35,6 +35,7 @@ class URILang {
   {
     // get CI instance
     $this->_ci =& get_instance();
+    $this->_ci->load->config('urilang');
 
     // get lang abbreviations from uri and config file
     $this->_supported_langs = $this->_ci->config->item('supported_languages');
