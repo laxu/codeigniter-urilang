@@ -3,6 +3,7 @@
 function get_instance() {
   $ci = new stdClass();
   $ci->config = new Config_stub();
+  $ci->load = new Loader_stub();
 
   return $ci;
 }
@@ -35,6 +36,11 @@ class Config_stub
     $this->items[$key] = $val;
   }
 
+}
+
+class Loader_stub
+{
+  public function config($val) {}
 }
 
 /* End of file */
