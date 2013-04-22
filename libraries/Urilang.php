@@ -133,7 +133,7 @@ class URILang {
    */
   public function get_lang_by_cookie()
   {
-    return $this->_ci->input->cookie('pref_lang', true);
+    return $this->_ci->input->cookie( config_item('cookie_prefix').'pref_lang', true);
   }
 
   /**
@@ -206,6 +206,25 @@ class URILang {
     {
       return key($selected_language);
     }
+  }
+  
+  public function reset_languages() 
+  {
+  $this->_ci->lang->language = array();
+	$this->_ci->lang->is_loaded = array();
+  }
+
+  public function reload_languages() 
+  {   
+	$is_loaded = $this->_ci->lang->is_loaded;
+	foreach($is_loaded as &$langfile) 
+	{
+		$langfile = str_replace('_lang.php','',$langfile);
+	}
+
+	$this->reset_languages();
+
+	$this->_ci->lang->load($is_loaded,'',FALSE,FALSE);
   }
 
 }
